@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
+<<<<<<< HEAD
+<!-- Written by QtCreator 4.5.0, 2018-10-25T21:32:30. -->
+=======
 <!-- Written by QtCreator 4.5.0, 2018-10-25T20:51:18. -->
+>>>>>>> cadc24a707c05efa91a7093eddf4b3140f91e739
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -282,7 +286,11 @@
      <value type="int">13</value>
      <value type="int">14</value>
     </valuelist>
+<<<<<<< HEAD
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+=======
     <value type="int" key="PE.EnvironmentAspect.Base">-1</value>
+>>>>>>> cadc24a707c05efa91a7093eddf4b3140f91e739
     <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
     <value type="QString" key="ProjectExplorer.CustomExecutableRunConfiguration.Arguments"></value>
     <value type="QString" key="ProjectExplorer.CustomExecutableRunConfiguration.Executable"></value>

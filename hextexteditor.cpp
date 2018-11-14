@@ -5,9 +5,11 @@
 #include <QScrollBar>
 #include "qmenu.h"
 #include "qapplication.h"
+#include "clipboard.h"
 #include <QClipboard>
 #include <QLineEdit>
 #include <QInputDialog>
+#include <QMimeData>
 #include "hexeditdialog.h"
 
 #define OFS_SEPATOR     3
@@ -30,6 +32,7 @@ HexTextEditor::HexTextEditor( QWidget* parent )
     , mSelectBeginIndex()
     , mSelectEndIndex()
     , mControlKeyStatus(false )
+    , mCursor(0)
 {
     setFont(QFont( "Consolas", 10)  );
 
@@ -101,7 +104,7 @@ void HexTextEditor::paintEvent( QPaintEvent *event )
     // 将背景刷成白色
     painter.fillRect( painter.viewport( ) , QBrush( mBKColorHexText ) );
 
-   
+
 
     //////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////
@@ -110,6 +113,8 @@ void HexTextEditor::paintEvent( QPaintEvent *event )
 
     if( mHexData.isEmpty( ) )
         return;
+
+    paintCursor(painter);
 
 
     //////////////////////////////////////////////////////////////////////////
@@ -146,7 +151,7 @@ void HexTextEditor::wheelEvent( QWheelEvent * e )
             QFont font = this->font();
             font.setPixelSize(font.pixelSize() + 10);
             setFont(font);
-            viewport()->repaint();
+            //viewport()->update();
             return ;
         }
         if( mCurLine <= 0 )
@@ -167,7 +172,7 @@ void HexTextEditor::wheelEvent( QWheelEvent * e )
             QFont font = this->font();
             font.setPixelSize(font.pixelSize() - 10);
             setFont(font);
-            viewport()->repaint();
+            //viewport()->update();
             return ;
         }
 
@@ -191,8 +196,6 @@ void HexTextEditor::resizeEvent( QResizeEvent * event )
 {
     event;
     mMaxVisualLine = viewport( )->height( ) / mLineHeight ;
-
-
     mScrollBar->move( viewport()->width() - 10 , 0 );
     mScrollBar->resize( 10 , viewport( )->height( ) );
 }
@@ -214,7 +217,7 @@ void HexTextEditor::mouseMoveEvent( QMouseEvent * e )
     else if( isOnHexTextColumn( e->pos( ) ) ) {
 
         // 将坐标转行成行号, 并发出信号
-        // 
+        //
         int line = ( pos.y( ) - mLineHeight - 5 ) / mLineHeight + mCurLine;
         int row = ( pos.x( ) - mLineNumberWidth + mCharWidth * 2 ) / mCharWidth / 3 ;
         setCursor( Qt::IBeamCursor );
@@ -244,7 +247,7 @@ void HexTextEditor::mouseMoveEvent( QMouseEvent * e )
         else
             setSelection( mSelectBeginIndex , mSelectEndIndex );
 
-        viewport( )->repaint( );
+        //viewport( )->repaint( );
     }
 }
 
@@ -260,6 +263,7 @@ void HexTextEditor::mousePressEvent( QMouseEvent * e )
             int row = ( pos.x( ) - mLineNumberWidth + mCharWidth * 2 ) / mCharWidth / 3 ;
 
             mSelectBeginIndex = line*LINE_ITEM_COUNT + row ;
+            mCursor.setPos(mSelectBeginIndex);
         }
     }
 }
@@ -271,7 +275,7 @@ void HexTextEditor::mouseReleaseEvent( QMouseEvent * e )
     if( e->button( ) == Qt::LeftButton ) {
         if( isOnHexTextColumn( e->pos( ) ) ) {
 
-\
+            \
             mMouseLbuttonStatus = false;
 
             // 将鼠标按下点转换为行列
@@ -287,7 +291,7 @@ void HexTextEditor::mouseReleaseEvent( QMouseEvent * e )
             else
                 setSelection( mSelectBeginIndex , mSelectEndIndex );
 
-            viewport( )->repaint( );
+            viewport()->update();
         }
     }
 }
@@ -312,34 +316,90 @@ void HexTextEditor::keyPressEvent( QKeyEvent * e )
     int key = e->key( );
     if( e->modifiers( ) == Qt::ControlModifier ) {
         switch( key ) {
-            case Qt::Key_Z: undo( ); break;
-            case Qt::Key_Y: redo( ); break;
-            case Qt::Key_G:menuGotoByteTriggered( ); break;
-            case  Qt::Key_E:menuEditTriggered( ); break;
-            case Qt::Key_C:menuCopyTriggered( ); break;
-            case Qt::Key_A:menuSelectAllTriggered( ); break;
-            case Qt::Key_Down:
-            {
-                if( mCurLine >= mMaxLine )
-                    return ;
+        case Qt::Key_Z: undo( ); break;
+        case Qt::Key_Y: redo( ); break;
+        case Qt::Key_G:menuGotoByteTriggered( ); break;
+        case  Qt::Key_E:menuEditTriggered( ); break;
+        case Qt::Key_C:menuCopyTriggered( ); break;
+        case Qt::Key_A:menuSelectAllTriggered( ); break;
+        case Qt::Key_Down:
+        {
+            if( mCurLine >= mMaxLine )
+                return ;
 
-                emit wheelDown( mRollStep );
-                // 向上移动滚动条
+            emit wheelDown( mRollStep );
+            // 向上移动滚动条
 
-                mCurLine++;
-                mScrollBar->setSliderPosition( mCurLine );
-            }
+            mCurLine++;
+            mScrollBar->setSliderPosition( mCurLine );
+        }
             break;
-            case Qt::Key_Up:
-            {
-                if( mCurLine <= 0 )
-                    return;
+        case Qt::Key_Up:
+        {
+            if( mCurLine <= 0 )
+                return;
 
-                emit wheelUp( mRollStep );
+            emit wheelUp( mRollStep );
 
-                // 向下移动滚动条
-                mCurLine--;
-                mScrollBar->setSliderPosition( mCurLine );
+            // 向下移动滚动条
+            mCurLine--;
+            mScrollBar->setSliderPosition( mCurLine );
+        }
+        }
+    }
+    else if(e->modifiers() == Qt::ShiftModifier){
+
+    }
+    else{
+        switch (key) {
+        case Qt::Key_Down:
+            mCursor.moveNextLine();
+            viewport()->update();
+            break;
+        case Qt::Key_Up:
+            mCursor.movePreLine();
+            viewport()->update();
+            break;
+        case Qt::Key_Left:
+            mCursor.movePre();
+            viewport()->update();
+            break;
+        case Qt::Key_Right:
+            mCursor.moveNext();
+            viewport()->update();
+            break;
+
+        case Qt::Key_Backspace:
+            if(mCursor.pos()==0)
+                return;
+            mEditUndoStack.push(mCursor.pos(), mHexData[mCursor.pos()],true);
+            mHexData.remove(mCursor.pos(),1);
+            mCursor.movePre();
+            viewport()->update();
+            break;
+        case Qt::Key_Delete:
+            if(mCursor.pos()>=mHexData.size())
+                return;
+            mEditUndoStack.push(mCursor.pos()+1, mHexData[mCursor.pos()+1],true);
+            mHexData.remove(mCursor.pos()+1,1);
+            viewport()->update();
+            break;
+        }
+        //        int data = 0;
+        //        if(key>='0' && key <= '9'){
+        //            data = key -'0';
+        //        }else if(key>='a' && key<='z'){
+        //            data = key -'a';
+        //        }
+        //         else if(key>='A' && key<='Z'){
+        //            data = key-'A';
+        //        }
+        if(QChar::isPrint(key)){
+            if( this->posIsOnVisual(mCursor.pos())){
+                mEditUndoStack.push(mCursor.pos(), mHexData[mCursor.pos()]);
+                mHexData[mCursor.pos()] = key;
+                mCursor.moveNext();
+                viewport()->update();
             }
         }
     }
@@ -394,11 +454,18 @@ void HexTextEditor::contextMenuEvent( QContextMenuEvent *event )
              this ,
              SLOT( menuGotoLineTriggered( ) ) );
 
-
+    connect( menu->addAction(tr("&parse from string")),
+             SIGNAL( triggered( ) ) ,
+             this ,
+             SLOT( menuParseFromString( ) ) );
+    connect( menu->addAction(tr("&parse from hex string")),
+             SIGNAL( triggered( ) ) ,
+             this ,
+             SLOT( menuParseFromHexString( ) ) );
 
 
     //让菜单显示的位置在鼠标的坐标上
-    menu->move( cursor( ).pos( ) ); 
+    menu->move( cursor( ).pos( ) );
     menu->show( );
 }
 
@@ -426,7 +493,7 @@ void HexTextEditor::menuCopyAsCStyle()
     getSelectionText( buff );
 
     buff.replace(" ",",0x");
-    buff.insert(0,"/*copy by petool hex editor*/\nunsigned char hexData[]=\n{\n0x");
+    buff.insert(0,"/*copy by enorez hex editor*/\nunsigned char hexData[]=\n{\n0x");
     buff.append("\n};");
 
     clipboard->setText( buff );
@@ -465,7 +532,7 @@ void HexTextEditor::menuGotoLineTriggered( )
         return;
 
     bool isOK;
-    QString text = QInputDialog::getText( NULL , 
+    QString text = QInputDialog::getText( NULL ,
                                           tr("goto") ,
                                           tr( "input linenumber" ) ,
                                           QLineEdit::Normal ,
@@ -503,7 +570,51 @@ void HexTextEditor::menuEditTriggered( )
         ++j;
     }
 
-    viewport( )->repaint( );
+    viewport()->update();
+}
+
+void HexTextEditor::menuParseFromHex()
+{
+    QByteArray data = Clipboard::getData();
+    const char*  p = data.data();
+    int beg = mCursor.pos();
+    for(int i = 0; i<data.size();++i){
+        if(!edit(i+beg, p[i])){
+            break;
+        }
+    }
+    //viewport()->update();
+}
+
+void HexTextEditor::menuParseFromString()
+{
+    menuParseFromHex();
+}
+
+void HexTextEditor::menuParseFromHexString()
+{
+    QByteArray data = Clipboard::getData();
+    data.replace(" ","");
+    const char* p = data.data();
+
+    qDebug() <<data;
+    char buff[3]={0};
+    quint8 byte=0;
+    int beg = mCursor.pos();
+    int size = data.size()/2;
+
+    for(int i = 0; i < size  ;++i){
+        buff[0] = *p++;
+        buff[1] = *p++;
+        if(sscanf(buff,"%x",&byte) == 1){
+            qDebug()<<buff<<"  "<<hex<<byte;
+            if(!edit(i+beg,byte))
+            {
+                break;
+            }
+        }
+    }
+    viewport()->update();
 }
 
 
@@ -519,7 +630,7 @@ void HexTextEditor::scrollbarMove( int nStep )
         emit    wheelUp( mCurLine - nStep );
 
     mCurLine = nStep;
-    viewport( )->repaint( );
+    viewport()->update();
 }
 
 // 设置字体
@@ -548,8 +659,8 @@ void HexTextEditor::setFont(const QFont &font )
     mStringWidth = LINE_ITEM_COUNT * mCharWidth;
 
     // 设置部件的最大窗口和最小窗口大小
-    setMinimumWidth( getCharWidth( ) * 10 + mHexTextWidth + mStringWidth );
-    setMaximumWidth( getCharWidth( ) * 10 + mHexTextWidth + mStringWidth );
+    //    setMinimumWidth( getCharWidth( ) * 10 + mHexTextWidth + mStringWidth );
+    //    setMaximumWidth( getCharWidth( ) * 10 + mHexTextWidth + mStringWidth );
 }
 
 
@@ -568,7 +679,7 @@ void HexTextEditor::setVisualPos( int pos )
         pos = mMaxLine ;
 
     mCurLine = pos;
-    viewport( )->repaint( );
+    viewport()->update();
 }
 
 int HexTextEditor::getVisualPos( ) const
@@ -589,7 +700,7 @@ void HexTextEditor::setVisualLine( int line )
     if( line<0 || line>mMaxLine )
         return;
     mCurLine = line;
-    viewport( )->repaint( );
+    viewport()->update();
 }
 
 
@@ -673,7 +784,12 @@ void HexTextEditor::setHexData( const QByteArray& data )
 
     mScrollBar->setRange( 0 , mMaxLine );
     // 重绘
-    viewport( )->repaint( );
+    viewport()->update();
+}
+
+QByteArray HexTextEditor::hexData() const
+{
+    return mHexData;
 }
 
 
@@ -705,12 +821,12 @@ void HexTextEditor::paintSelectRect( QPainter& painter )
         nBegLine = i.mLineNumber;
         nCount = i.mCount;
         lineCount = nCount / 16;
-       
+
 
         if( nCount > LINE_ITEM_COUNT ) { // 字符个数超出一行的个数
             nCount = LINE_ITEM_COUNT;
         }
-      
+
         if( nBegLine < mCurLine ) {
             if( nBegLine + lineCount < mCurLine) {
                 continue;
@@ -744,6 +860,33 @@ void HexTextEditor::paintSelectRect( QPainter& painter )
     }
 }
 
+void HexTextEditor::paintCursor(QPainter &painter)
+{
+    int pos = mCursor.pos();
+    QColor color = mColorSelect;
+    color.setBlue(mColorSelect.blue()+20);
+    QBrush brush(color );
+    int nStartY = mLineHeight + 5;
+
+    int line = positionToLineNumber(pos );
+    int row = pos % LINE_ITEM_COUNT;
+
+    // 判断光标是否在当前显示范围内.
+    if( line < mCurLine || line-mCurLine > getMaxVisualLine())
+        return;
+
+    painter.fillRect( mLineNumberWidth + mCharWidth * row * 3 ,
+                      nStartY + mLineHeight * ( line - mCurLine ) ,
+                      mCharWidth,
+                      mLineHeight,
+                      brush);
+    painter.fillRect( mLineNumberWidth + mHexTextWidth + mCharWidth * row ,
+                      nStartY + mLineHeight*( line - mCurLine ) ,
+                      mCharWidth ,
+                      mLineHeight,
+                      brush );
+}
+
 // 绘制出行号
 void HexTextEditor::paintLineNumber( QPainter& painter )
 {
@@ -757,7 +900,7 @@ void HexTextEditor::paintLineNumber( QPainter& painter )
     QRect   pos( 0 , mLineHeight + 5 , mLineNumberWidth - 5 , mLineHeight );
     QString text;
 
-    // 
+    //
     
     painter.setPen( mColorLineNumer );
     painter.drawText( QPoint(0,mLineHeight ) , "enorez" );
@@ -842,9 +985,9 @@ void HexTextEditor::paintHexText( QPainter& painter )
 // 参  数: int absolutePos   这行字符串在二进制字节流中的绝对地址(二进制字节流指的是mHexData)         
 //************************************
 void HexTextEditor::paintHexTextLine( QPainter& painter ,
-                                      int line , 
-                                      int row ,  
-                                      const char * pStr , 
+                                      int line ,
+                                      int row ,
+                                      const char * pStr ,
                                       int    nSize ,
                                       int    absolutePos )
 {
@@ -927,10 +1070,10 @@ void HexTextEditor::drawText( QPainter& painter ,
     int startPos = 0;
     int scal = 0;
     switch( column ) {
-        case e_lineNumber:startPos = 0; scal = 1; break;
-        case e_hexText:startPos = mLineNumberWidth; scal = 3; break;
-        case e_string:startPos = mLineNumberWidth + mHexTextWidth; scal = 1; break;
-        default: return;
+    case e_lineNumber:startPos = 0; scal = 1; break;
+    case e_hexText:startPos = mLineNumberWidth; scal = 3; break;
+    case e_string:startPos = mLineNumberWidth + mHexTextWidth; scal = 1; break;
+    default: return;
     }
 
     QRect pos( startPos + row*mCharWidth  * scal ,
@@ -993,7 +1136,7 @@ void HexTextEditor::paintString( QPainter& painter )
 bool HexTextEditor::isOnHexTextColumn( const QPoint& pos )
 {
     return   pos.y( ) >= mLineHeight + 5
-        && pos.x( ) > mLineNumberWidth && pos.x( ) < mLineNumberWidth + mHexTextWidth;
+            && pos.x( ) > mLineNumberWidth && pos.x( ) < mLineNumberWidth + mHexTextWidth;
 }
 
 //************************************
@@ -1005,7 +1148,7 @@ bool HexTextEditor::isOnHexTextColumn( const QPoint& pos )
 bool HexTextEditor::isOnLineNumberColumn( const QPoint& pos )
 {
     return pos.y( ) >= mLineHeight + 5
-        && pos.x( ) < mLineNumberWidth;
+            && pos.x( ) < mLineNumberWidth;
 }
 
 //************************************
@@ -1017,7 +1160,7 @@ bool HexTextEditor::isOnLineNumberColumn( const QPoint& pos )
 bool HexTextEditor::isOnStringColumn( const QPoint& pos )
 {
     return  pos.y( ) >= mLineHeight + 5
-        && pos.x( ) >= mLineNumberWidth + mHexTextWidth && pos.x( ) < viewport( )->width( ) - 20;
+            && pos.x( ) >= mLineNumberWidth + mHexTextWidth && pos.x( ) < viewport( )->width( ) - 20;
 }
 
 // 清空二进制数据和着色器
@@ -1037,16 +1180,16 @@ void HexTextEditor::setSelection( int nBeginIndex , int nEndIndex )
         return ;
 
     if( nBeginIndex < 0
-        || nEndIndex < 0
-        || nEndIndex < nBeginIndex
-        || nEndIndex - 1 > mHexData.size( )
-        || nBeginIndex == nEndIndex)
+            || nEndIndex < 0
+            || nEndIndex < nBeginIndex
+            || nEndIndex - 1 > mHexData.size( )
+            || nBeginIndex == nEndIndex)
         return;
 
     mSelect.clear( );
     SelectRangle select;
 
-  
+
     // 选中单行
     if( nEndIndex / LINE_ITEM_COUNT == nBeginIndex / LINE_ITEM_COUNT ) { // 判断是否是同一行
         select.mRow = nBeginIndex % LINE_ITEM_COUNT; // 计算出开始部分的列
@@ -1085,7 +1228,7 @@ void HexTextEditor::setSelection( int nBeginIndex , int nEndIndex )
             nEndIndex -= select.mCount;
         }
     }
-  
+
 
     if( nBeginIndex < nEndIndex ) {
 
@@ -1095,7 +1238,7 @@ void HexTextEditor::setSelection( int nBeginIndex , int nEndIndex )
         mSelect.push_back( select );
     }
 
-    viewport( )->repaint( );
+    viewport()->update();
 }
 
 
@@ -1142,7 +1285,9 @@ int HexTextEditor::getSlectionLength( )const
 void HexTextEditor::addToken( const TokenList::Token& token )
 {
     if( mTokenList.addToken( token ) )
-        viewport( )->repaint( );
+    {
+        viewport()->update();
+    }
 
 }
 
@@ -1150,7 +1295,8 @@ void HexTextEditor::addToken( const TokenList::Token& token )
 bool HexTextEditor::updateToken( const TokenList::Token& token )
 {
     if( mTokenList.updateToken( token ) ) {
-        viewport( )->repaint( );
+        viewport()->update();
+
         return true;
     }
     return false;
@@ -1183,8 +1329,12 @@ void HexTextEditor::undo( )
         char* pData = mHexData.data( );
         mEditRedoStack.push( node.index , pData[ node.index ] );
 
-        pData[ node.index ] = (char)node.data;
-        viewport( )->repaint( );
+        if(node.isInsert){
+            mHexData.insert(node.index,node.data);
+        }else{
+            pData[ node.index ] = (char)node.data;
+        }
+        viewport()->update();
     }
 }
 
@@ -1192,12 +1342,17 @@ void HexTextEditor::undo( )
 void HexTextEditor::redo( )
 {
     HexEidtStack::NODE node ;
-    if( mEditRedoStack.pop( node ) ) { 
+    if( mEditRedoStack.pop( node ) ) {
 
         char* pData = mHexData.data( );
         mEditUndoStack.push( node.index , pData[ node.index ] );
-        pData[ node.index ] = (char)node.data;
-        viewport( )->repaint( );
+
+        if(node.isInsert){
+            mHexData.insert(node.index,node.data);
+        }else{
+            pData[ node.index ] = (char)node.data;
+        }
+        viewport()->update();
     }
 }
 
@@ -1293,6 +1448,5 @@ int HexTextEditor::findByte( const unsigned char* byte , int size )
     
     return mHexData.indexOf( hex );
 }
-
 
 

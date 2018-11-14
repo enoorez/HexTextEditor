@@ -23,6 +23,18 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+<<<<<<< HEAD
+    ./hexeditdialog.cpp \
+    ./hextexteditor.cpp \
+    ./hextexteditorcolorConfigure.cpp \
+    ./tokenlist.cpp
+
+HEADERS += \
+    ./hexeditdialog.h \
+    ./hextexteditor.h \
+    ./hextexteditorcolorConfigure.h \
+    ./tokenlist.h
+=======
     src/hexeditdialog.cpp \
     src/hextexteditor.cpp \
     src/hextexteditorcolorConfigure.cpp \
@@ -33,6 +45,7 @@ HEADERS += \
     src/hextexteditor.h \
     src/hextexteditorcolorConfigure.h \
     src/tokenlist.h
+>>>>>>> cadc24a707c05efa91a7093eddf4b3140f91e739
 
 unix {
     target.path = /usr/lib

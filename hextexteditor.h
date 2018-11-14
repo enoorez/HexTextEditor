@@ -53,19 +53,24 @@ enum ColumnCode
     e_string,// 字符串栏
 };
 
+
 class HexEidtStack
 {
+public:
+
+
 public:
     typedef struct NODE
     {
         int    index;
         int    data;
+        bool   isInsert;
     }NODE;
 
     bool    isEmpty( )const {return mData.isEmpty(); }
     int     size( )const{return mData.size ();};
     void    clear( ){mData.clear();};
-    void    push( int index,unsigned char data ) {mData.push_back(NODE{index,data});}
+    void    push( int index,unsigned char data ,bool isInsert=false) {mData.push_back(NODE{index,data,isInsert});}
     bool    pop(NODE& data )
     { 
         if( mData.isEmpty( ) )
@@ -87,6 +92,24 @@ class HexTextEditor : public QAbstractScrollArea
 public:
     HexTextEditor( QWidget* parent =nullptr);
 
+public:
+    class Cursor
+    {
+        int mPos;
+        int mLineWidth;
+    public:
+        Cursor(int pos,int lineWidth=LINE_ITEM_COUNT) :mPos(pos),mLineWidth(lineWidth){}
+
+        void moveNext(){++mPos;}
+        void movePre(){--mPos;}
+        void moveNextLine(int lineWidth=-1){ mPos+= lineWidth==-1?mLineWidth:lineWidth;}
+        void movePreLine(int lineWidth=-1){mPos-=lineWidth==-1?mLineWidth:lineWidth;}
+        void setPos(int pos){mPos=pos;}
+        int pos()const{return mPos;}
+
+        int lineWidth() const;
+        void setLineWidth(int lineWidth);
+    };
 
 protected:
     /*
@@ -103,6 +126,7 @@ protected:
     bool            isOnStringColumn( const QPoint& pos );
 
     virtual void    paintSelectRect( QPainter& painter );
+    virtual void    paintCursor(QPainter& painter);
     virtual void    paintLineNumber( QPainter& painter );
     virtual void    paintHexText( QPainter& painter );
     virtual void    paintString( QPainter& painter );
@@ -130,8 +154,6 @@ protected:
     virtual void    contextMenuEvent( QContextMenuEvent *event );
 
 
-
-
 public:
     static int      getNumerOfDigit( int num );
     static void     hexToString( const char* pHex , int nLen , char* pBuff );
@@ -153,6 +175,10 @@ public slots:
     void            menuGotoByteTriggered(); // 跳转到指定地址
     void            menuGotoLineTriggered( ); // 跳转到指定行
     void            menuEditTriggered( ); // 编辑
+    void            menuParseFromHex();
+    void            menuParseFromString();
+    void            menuParseFromHexString();
+
     void            scrollbarMove( int nStep );
 
 public:
@@ -184,7 +210,7 @@ public:
     void            setRollStep( int rollStep );
 
     void            setHexData( const QByteArray& Data );
-
+    QByteArray      hexData()const;
 
     // 设置选中区域参数为: [开始地址,结束地址)
     void            setSelection( int nBeginIndex , int nEndIndex );
@@ -254,6 +280,7 @@ private:
     bool            mControlKeyStatus;
     HexEidtStack    mEditUndoStack; 
     HexEidtStack    mEditRedoStack;
+    Cursor          mCursor;
 
     QScrollBar*     mScrollBar;
     bool            mMouseLbuttonStatus; //true : 鼠标弹起, false: 鼠标按下
